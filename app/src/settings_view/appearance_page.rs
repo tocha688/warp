@@ -56,6 +56,7 @@ use crate::gpu_state::{GPUState, GPUStateEvent};
 use crate::prompt::editor_modal::OpenSource as PromptEditorOpenSource;
 use crate::server::telemetry::{InputUXChangeOrigin, TelemetryEvent};
 use crate::settings::app_icon::{AppIcon, AppIconSettings};
+use crate::settings::language::{Language, LanguageSetting, LanguageSettings};
 use crate::settings::{
     active_theme_kind, respect_system_theme, AIFontName, AppEditorSettings, CursorBlink,
     CursorBlinkEnabled, CursorDisplayType, EnforceMinimumContrast, FocusPaneOnHover, FontSettings,
@@ -467,6 +468,7 @@ pub enum AppearancePageAction {
     RemoveDefaultDirectoryTabColor {
         path: PathBuf,
     },
+    SetLanguage(Language),
 }
 
 pub struct AppearanceSettingsPageView {
@@ -498,6 +500,7 @@ pub struct AppearanceSettingsPageView {
     available_families: HashMap<String, (Option<FamilyId>, FontType)>,
     view_font_type: FontType,
     alt_screen_padding_editor: ViewHandle<EditorView>,
+    language_dropdown: ViewHandle<Dropdown<AppearancePageAction>>,
     color_picker_dot_states: Vec<Vec<MouseStateHandle>>,
     directory_tab_color_delete_buttons: Vec<ViewHandle<ActionButton>>,
     header_toolbar_inline_editor: ViewHandle<HeaderToolbarInlineEditor>,
@@ -663,6 +666,12 @@ impl TypedActionView for AppearanceSettingsPageView {
                         .value()
                         .with_color(&path, DirectoryTabColor::Suppressed);
                     let _ = settings.directory_tab_colors.set_value(new_value, ctx);
+                });
+                ctx.notify();
+            }
+            SetLanguage(language) => {
+                LanguageSettings::handle(ctx).update(ctx, |language_settings, ctx| {
+                    let _ = language_settings.language.set_value(*language, ctx);
                 });
                 ctx.notify();
             }
@@ -1187,6 +1196,16 @@ impl AppearanceSettingsPageView {
         let header_toolbar_inline_editor =
             ctx.add_typed_action_view(HeaderToolbarInlineEditor::new);
 
+        let language_dropdown = Self::build_language_dropdown(ctx);
+        ctx.subscribe_to_model(&LanguageSettings::handle(ctx), |me, _, _, ctx| {
+            me.language_dropdown.update(ctx, |dropdown, ctx| {
+                let language = *LanguageSettings::as_ref(ctx).language.value();
+                dropdown
+                    .set_selected_by_name(Self::language_dropdown_item_label(language), ctx);
+            });
+            ctx.notify();
+        });
+
         AppearanceSettingsPageView {
             page: Self::build_page(ctx),
             window_id: ctx.window_id(),
@@ -1216,6 +1235,7 @@ impl AppearanceSettingsPageView {
             zoom_reset_button_mouse_state: MouseStateHandle::default(),
             available_families: Default::default(),
             view_font_type: Default::default(),
+            language_dropdown,
             color_picker_dot_states: (0..directory_tab_colors(ctx).len())
                 .map(|_| {
                     (0..TAB_COLOR_OPTIONS.len() + 1)
@@ -1398,6 +1418,11 @@ impl AppearanceSettingsPageView {
         categories.push(Category::new(
             "Full-screen Apps",
             vec![Box::new(AltScreenPaddingWidget::default())],
+        ));
+
+        categories.push(Category::new(
+            "Language",
+            vec![Box::new(LanguageWidget)],
         ));
 
         PageType::new_categorized(categories, None)
@@ -2445,6 +2470,42 @@ impl AppearanceSettingsPageView {
 
             dropdown
         })
+    }
+
+    fn build_language_dropdown(
+        ctx: &mut ViewContext<Self>,
+    ) -> ViewHandle<Dropdown<AppearancePageAction>> {
+        ctx.add_typed_action_view(|ctx| {
+            let mut dropdown = Dropdown::new(ctx);
+            dropdown.set_top_bar_max_width(INPUT_MODE_DROPDOWN_WIDTH);
+            dropdown.set_menu_width(INPUT_MODE_DROPDOWN_WIDTH, ctx);
+
+            let values = vec![Language::EnglishUs, Language::SimplifiedChinese];
+            let current_value = *LanguageSettings::as_ref(ctx).language.value();
+            let selected_index = values
+                .iter()
+                .position(|val| *val == current_value)
+                .unwrap_or(0);
+
+            dropdown.add_items(
+                values
+                    .into_iter()
+                    .map(|val| {
+                        DropdownItem::new(
+                            Self::language_dropdown_item_label(val),
+                            AppearancePageAction::SetLanguage(val),
+                        )
+                    })
+                    .collect(),
+                ctx,
+            );
+            dropdown.set_selected_by_index(selected_index, ctx);
+            dropdown
+        })
+    }
+
+    fn language_dropdown_item_label(val: Language) -> &'static str {
+        val.display_label()
     }
 
     fn handle_directory_color_add_picker_event(
@@ -5169,5 +5230,38 @@ impl SettingsPageMeta for AppearanceSettingsPageView {
 impl From<ViewHandle<AppearanceSettingsPageView>> for SettingsPageViewHandle {
     fn from(view_handle: ViewHandle<AppearanceSettingsPageView>) -> Self {
         SettingsPageViewHandle::Appearance(view_handle)
+    }
+}
+
+#[derive(Default)]
+struct LanguageWidget;
+
+impl SettingsWidget for LanguageWidget {
+    type View = AppearanceSettingsPageView;
+
+    fn search_terms(&self) -> &str {
+        "display language english simplified chinese 语言 简体中文"
+    }
+
+    fn render(
+        &self,
+        view: &Self::View,
+        appearance: &Appearance,
+        app: &AppContext,
+    ) -> Box<dyn Element> {
+        render_dropdown_item(
+            appearance,
+            "Display language",
+            None,
+            None,
+            LocalOnlyIconState::for_setting(
+                LanguageSetting::storage_key(),
+                LanguageSetting::sync_to_cloud(),
+                &mut view.local_only_icon_tooltip_states.borrow_mut(),
+                app,
+            ),
+            None,
+            &view.language_dropdown,
+        )
     }
 }

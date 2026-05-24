@@ -43,6 +43,7 @@ mod global_resource_handles;
 mod gpu_state;
 mod input_classifier;
 mod interval_timer;
+pub mod i18n;
 mod linear;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod login_item;
