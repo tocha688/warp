@@ -5240,7 +5240,7 @@ impl SettingsWidget for LanguageWidget {
     type View = AppearanceSettingsPageView;
 
     fn search_terms(&self) -> &str {
-        "language display language english simplified chinese 语言 简体中文"
+        "display language english simplified chinese 语言 简体中文"
     }
 
     fn render(

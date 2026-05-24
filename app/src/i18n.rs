@@ -49,8 +49,8 @@ fn translate_en(key: &str) -> &'static str {
         "appearance.category.cursor" => "Cursor",
         "appearance.category.tabs" => "Tabs",
 
-        // Unknown key: return a placeholder.
-        _ => "(unknown)",
+        // Unknown key: return a placeholder so missing translations are obvious.
+        _ => "[missing translation]",
     }
 }
 
